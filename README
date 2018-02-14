@@ -1,0 +1,1 @@
+This is general database for machine learning tasks. The package contains sql to create schema and tables to store features and labels and python api to store and read features and labels. 
