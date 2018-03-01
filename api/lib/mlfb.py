@@ -3,7 +3,7 @@
 
 import psycopg2
 from configparser import ConfigParser
-
+import logging
 
 class mlfb(object):
 
@@ -37,28 +37,28 @@ class mlfb(object):
             params = self.config()
 
             # connect to the PostgreSQL server
-            print('Connecting to the PostgreSQL database...')
+            logging.info('Connecting to the PostgreSQL database...')
             conn = psycopg2.connect(**params)
 
             # create a cursor
             cur = conn.cursor()
 
             # execute a statement
-            print('PostgreSQL database version:')
+            logging.debug('PostgreSQL database version:')
             cur.execute('SELECT version()')
 
             # display the PostgreSQL database server version
             db_version = cur.fetchone()
-            print(db_version)
+            logging.debug(db_version)
 
             # close the communication with the PostgreSQL
             cur.close()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            logging.critical(error)
         finally:
             if conn is not None:
                 conn.close()
-                print('Database connection closed.')
+                logging.debug('Database connection closed.')
 
 
     def get_rows_trains(self):
@@ -77,17 +77,16 @@ class mlfb(object):
                 ORDER BY bb2.id;
             """)
 
-
-            print("The number of training.trains_fmi_trainingdata and locagtion: ", cur.rowcount)
+            logging.info("The number of training.trains_fmi_trainingdata and locagtion: {}".format(cur.rowcount))
             row = cur.fetchone()
 
             while row is not None:
-                print(row)
+                # logging.debug(row)
                 row = cur.fetchone()
 
             cur.close()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            logging.critical(error)
         finally:
             if conn is not None:
                 conn.close()
