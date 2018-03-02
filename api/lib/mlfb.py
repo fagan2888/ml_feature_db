@@ -1,21 +1,25 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-
 import psycopg2
 from configparser import ConfigParser
 import logging
+import numpy as np
 
 class mlfb(object):
 
-    def __init__(self, id):
-        self.id = 1
+    conn = None
+    config_filename = None
+    id = 1
+    
+    def __init__(self, id=1, logging_level='INFO', config_filename='cnf/database.ini'):
+        self.id = id
+        self.config_filename = config_filename
 
-
-    def config(self, filename='cnf/database.ini', section='postgresql'):
+    def config(self, section='postgresql'):
         # create a parser
         parser = ConfigParser()
         # read config file
-        parser.read(filename)
+        parser.read(self.config_filename)
 
         # get section, default to postgresql
         db = {}
@@ -24,7 +28,7 @@ class mlfb(object):
             for param in params:
                 db[param[0]] = param[1]
         else:
-            raise Exception('Section {0} not found in the {1} file'.format(section, filename))
+            raise Exception('Section {0} not found in the {1} file'.format(section, self.config_filename))
 
         return db
 
@@ -61,34 +65,79 @@ class mlfb(object):
                 logging.debug('Database connection closed.')
 
 
-    def get_rows_trains(self):
-        """ query data from the trains table """
-        conn = None
-        try:
-            params = self.config()
-            conn = psycopg2.connect(**params)
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT 
-                aa1.id, aa1.type, aa1.source_opt,aa1.fk_id,aa1.parameter,aa1.value,  bb2.id, bb2.name,bb2.lat,bb2.lon
+    def get_rows(self):
+        """ query data """
 
-                FROM traindata.trains_fmi_trainingdata AA1
-                INNER JOIN traindata.trains_fmi_location_wgs84 BB2 ON AA1.fk_id = BB2.id
-                ORDER BY bb2.id;
-            """)
+        # row id is not available, use time instead until it is                    
+        sql = """
+        SELECT b.id, EXTRACT(epoch from a.timestamp2) as time, st_x(b.geom) as lon, st_y(b.geom) as lat, a.parameter, a.value, a.row
+        FROM traindata_test.data a, traindata_test.location b
+        WHERE a.location_id = b.id AND a.type='feature' AND a.row is not null 
+        ORDER BY time, a.location_id, a.parameter
+        LIMIT 10000
+        """
+        
+        logging.debug(sql)
+        rows = self._query(sql)
 
-            logging.info("The number of training.trains_fmi_trainingdata and locagtion: {}".format(cur.rowcount))
-            row = cur.fetchone()
+        result = []
+        header = ['time', 'lon', 'lat']
+        prev_row_id = None
+            
+        while len(rows) > 0:
+            row = rows.pop()
+            # row_id = row[6]
+            row_id = row[1]
+            # print("Prev id: {} - id: {}".format(prev_row_id, row_id))
+            if row_id != prev_row_id:
+                try:
+                    if len(resrow) == len(header):                        
+                        result.append(resrow)
+                    else:
+                        print(resrow)
+                except:
+                    pass
+                
+                resrow = [row[1], row[2], row[3]]
+                prev_row_id = row_id
+            else:
+                resrow.append(row[5])
+                if row[4] not in header:
+                    header.append(row[4])
+                
+        print(header)
+        print(np.array(result))
 
-            while row is not None:
-                # logging.debug(row)
-                row = cur.fetchone()
+    def execute(self, statement):
+        """
+        Execute single SQL statement in
+        a proper manner
+        """
+        self._connect()
+        with self.conn as conn:
+            with conn.cursor() as curs:
+                curs.execute(statement)
+        
+    def _connect(self):
+        """ Create connection if needed """
+        params = self.config()
+        self.conn = psycopg2.connect(**params)
+        return self.conn
+        
+    def _query(self, sql):
+        """
+        Execute query and return results
+        
+        sql str sql to execute
+        
+        return list of sets
+        """
+        self._connect()
+        with self.conn as conn:
+            with conn.cursor() as curs:
+                curs.execute(sql)
+                results = curs.fetchall()
+                return results
 
-            cur.close()
-        except (Exception, psycopg2.DatabaseError) as error:
-            logging.critical(error)
-        finally:
-            if conn is not None:
-                conn.close()
 
 

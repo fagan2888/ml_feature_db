@@ -18,8 +18,8 @@ def main():
     # start_time = dt.datetime.strptime(options.start_time, "%Y%m%d%H%M")
     # end_time = dt.datetime.strptime(options.end_time, "%Y%m%d%H%M")
 
-    a = mlfb.mlfb(1)
-    a.get_rows_trains()
+    a = mlfb.mlfb(1, logging_level=options.logging_level)
+    a.get_rows()
 
     # Serialize model to disc
     # logging.info('Serializing dataset to disc: {}'.format(options.save_path))
