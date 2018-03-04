@@ -35,10 +35,10 @@ def main():
     sql = """
     CREATE TABLE {schema}.data
     (
-      id integer,
+      id SERIAL,
       type character varying(254) COLLATE pg_catalog."default",
       source character varying(254) COLLATE pg_catalog."default",
-      "time" timestamp without time zone[],
+      "time" TIMESTAMP,
       location_id bigint,
       parameter character varying(254) COLLATE pg_catalog."default",
       value double precision,
@@ -58,7 +58,7 @@ def main():
     sql = """
     CREATE TABLE {schema}.location
     (
-      id integer,
+      id SERIAL,
       name character varying(254) COLLATE pg_catalog."default",
       lat numeric,
       lon numeric,
