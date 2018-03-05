@@ -66,7 +66,7 @@ def find_id(locations, name):
     
 def main():
     """
-    Main python script for creating the classification model.
+    Put labels from csv file to db
     """
 
     a = mlfb.mlfb()
