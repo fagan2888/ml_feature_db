@@ -10,17 +10,22 @@ from lib import mlfb
 
 def main():
     """
-    Main python script for creating the classification model.
+    Get data from db and save it as csv
     """
     
-    # Load the data and split it to training and testing datasets
-    logging.debug('Loading classification dataset from db')
+    logging.info('Loading classification dataset from db')
     # start_time = dt.datetime.strptime(options.start_time, "%Y%m%d%H%M")
     # end_time = dt.datetime.strptime(options.end_time, "%Y%m%d%H%M")
 
     a = mlfb.mlfb(1, logging_level=options.logging_level)
-    a.get_rows()
+    metadata, header, data = a.get_rows(options.dataset)
 
+    logging.debug('Length of metadata: {}'.format(len(metadata)))
+    logging.debug('Shape of data {}'.format(data.shape))
+    logging.debug('Header is: {}'.format(','.join(header)))
+
+    # TODO saving as csv
+    
     # Serialize model to disc
     # logging.info('Serializing dataset to disc: {}'.format(options.save_path))
     
@@ -35,6 +40,7 @@ if __name__=='__main__':
     parser.add_argument('--start_time', type=str, help='Start time of the classification data interval')
     parser.add_argument('--end_time', type=str, help='End time of the classification data interval')
     parser.add_argument('--save_path', type=str, default=None, help='Dataset save path and filename')
+    parser.add_argument('--dataset', type=str, default=None, help='Dataset name')    
     parser.add_argument('--logging_level',
                         type=str,
                         default='INFO',
