@@ -102,7 +102,7 @@ def main():
             logging.error('No location data for {}'.format(loc))
             continue
 
-    a.add_rows('label', header, data, metadata, source='tehanu-1-2')        
+    a.add_rows('label', header, data, metadata, dataset='tehanu-1-2')
     
 if __name__=='__main__':
 

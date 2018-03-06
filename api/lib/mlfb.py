@@ -95,7 +95,7 @@ class mlfb(object):
               a.parameter, a.value, a.row 
               FROM {schema}.data a, {schema}.location b 
               WHERE a.location_id = b.id AND a.type='feature' 
-                AND a.row is not null AND a.source='{dataset}'
+                AND a.row is not null AND a.dataset='{dataset}'
               ORDER BY a.row, t, a.location_id, a.parameter LIMIT 100
               """.format(schema=self.schema, dataset=dataset_name)
         
@@ -166,7 +166,7 @@ class mlfb(object):
                 sql = sql + "('{name}', ST_GeomFromText('POINT({lon} {lat})'))".format(name=loc[0], lat=loc[1], lon=loc[2])
             self.execute(sql)
 
-    def add_rows(self, _type, header, data, metadata, source):
+    def add_rows(self, _type, header, data, metadata, dataset):
         """
         Add rows to the db
         
@@ -178,18 +178,18 @@ class mlfb(object):
                    numpy array or similar containing data in the same order with header
         metadata : list
                    list containing metadata in following order ['time', 'location_id']
-        source   : str
-                   optional source information
+        dataset   : str
+                   optional dataset information
         """
 
-        logging.info('Trying to insert {} {}s with source {}'.format(len(data), _type, source))
+        logging.info('Trying to insert {} {}s with dataset {}'.format(len(data), _type, dataset))
         
-        sql = "INSERT INTO {schema}.data (type, source, time, location_id, parameter, value, row) VALUES ".format(schema=self.schema)
+        sql = "INSERT INTO {schema}.data (type, dataset, time, location_id, parameter, value, row) VALUES ".format(schema=self.schema)
         i = 0
         first = True
         for row in data:            
             j = 0
-            row = source+'-'+str(i)
+            row = dataset+'-'+str(i)
             for param in header:
                 if metadata[i][1] is None:
                     logging.error('No location for row {}'.format(i))
@@ -203,7 +203,7 @@ class mlfb(object):
                 else:
                     t = metadata[i][0]
                 
-                sql = sql + "('{_type}', '{source}', '{time}', {location_id}, '{parameter}', {value}, '{row}')".format(_type=_type, source=source, time=t.strftime('%Y-%m-%d %H:%M:%S'), location_id=metadata[i][1], parameter=param, value=data[i][j], row=row)
+                sql = sql + "('{_type}', '{dataset}', '{time}', {location_id}, '{parameter}', {value}, '{row}')".format(_type=_type, dataset=dataset, time=t.strftime('%Y-%m-%d %H:%M:%S'), location_id=metadata[i][1], parameter=param, value=data[i][j], row=row)
                 j += 1                        
             i +=1
 
@@ -254,7 +254,7 @@ class mlfb(object):
             sql += ", ST_x(geom) as lon, ST_y(geom) as lat"
         else:
             sql += ", ST_AsText(geom) as wkt"
-        sql += " FROM {schema}.location WHERE id IN (SELECT location_id FROM {schema}.data WHERE source='{source}')".format(schema=self.schema, source=dataset)
+        sql += " FROM {schema}.location WHERE id IN (SELECT location_id FROM {schema}.data WHERE dataset='{dataset}')".format(schema=self.schema, dataset=dataset)
         # logging.debug(sql)
         return self._query(sql)        
         

@@ -37,7 +37,7 @@ def main():
     (
       id SERIAL,
       type character varying(254) COLLATE pg_catalog."default",
-      source character varying(254) COLLATE pg_catalog."default",
+      dataset character varying(254) COLLATE pg_catalog."default",
       "time" TIMESTAMP,
       location_id bigint,
       parameter character varying(254) COLLATE pg_catalog."default",
