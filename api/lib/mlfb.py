@@ -73,7 +73,7 @@ class mlfb(object):
                 logging.debug('Database connection closed.')
 
 
-    def get_rows(self, dataset_name, geom_type='point'):
+    def get_rows(self, dataset_name, geom_type='point', rowtype='feature'):
         """ 
         Get all feature rows from given dataset
         
@@ -81,6 +81,8 @@ class mlfb(object):
                        dataset name
         geom_type : ('point'|'wkt')
                     How geometry is returned. If set to point, {'lat' x.xx, 'lon': x.xx} dict is returned. If set to WKT, WKT is returned. Default point
+        rowtype : str
+                  Type of rows to be returned (default feature)
         """
 
         sql = """
@@ -94,10 +96,10 @@ class mlfb(object):
         sql += """ 
               a.parameter, a.value, a.row 
               FROM {schema}.data a, {schema}.location b 
-              WHERE a.location_id = b.id AND a.type='feature' 
+              WHERE a.location_id = b.id AND a.type='{type}' 
                 AND a.row is not null AND a.dataset='{dataset}'
-              ORDER BY a.row, t, a.location_id, a.parameter LIMIT 100
-              """.format(schema=self.schema, dataset=dataset_name)
+              ORDER BY a.row, t, a.location_id, a.parameter
+              """.format(schema=self.schema, dataset=dataset_name, type=rowtype)
         
         # logging.debug(sql)
         rows = self._query(sql)
@@ -183,6 +185,9 @@ class mlfb(object):
         """
 
         logging.info('Trying to insert {} {}s with dataset {}'.format(len(data), _type, dataset))
+        logging.debug('Length of header: {}'.format(len(header)))
+        logging.debug('Shape of data: {}'.format(data.shape))
+        logging.debug('Length of metadata: {}'.format(len(metadata)))
         
         sql = "INSERT INTO {schema}.data (type, dataset, time, location_id, parameter, value, row) VALUES ".format(schema=self.schema)
         i = 0
@@ -210,6 +215,29 @@ class mlfb(object):
         # logging.debug(sql)
         self.execute(sql)        
 
+    def remove_dataset(self, dataset, type=None, clean_locations=False):
+        """
+        Remove dataset
+        
+        dataset : str
+                  dataset name
+        type : str
+               If set, only given type is removed (by default all types are removed)
+        clean_locations : boolean
+                          If True, locations with no data rows are cleaned (default False)
+        """
+
+        # Remove dataset
+        sql = "DELETE FROM {schema}.data WHERE dataset='{dataset}'".format(schema=self.schema, dataset=dataset)
+        if type is not None:
+            sql += " AND type='{type}'".format(type=type)
+        self.execute(sql)
+        
+        # Clean locations
+        if clean_locations:
+            sql = "DELETE FROM {schema}.location WHERE id NOT IN (SELECT location_id FROM {schema}.data)".format(schema=self.schema)
+            self.execute(sql)
+        
     def get_locations_by_name(self, names):
         """
         Find location ids by names
