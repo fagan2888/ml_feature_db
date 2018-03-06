@@ -30,36 +30,14 @@ def main():
         logging.debug(sql)
         if not options.simulate:
             a.execute(sql)
-    
-    # Create data table
-    sql = """
-    CREATE TABLE {schema}.data
-    (
-      id SERIAL,
-      type character varying(254) COLLATE pg_catalog."default",
-      dataset character varying(254) COLLATE pg_catalog."default",
-      "time" TIMESTAMP,
-      location_id bigint,
-      parameter character varying(254) COLLATE pg_catalog."default",
-      value double precision,
-      "row" character varying(254) COLLATE pg_catalog."default"
-    )
-    WITH (
-      OIDS = FALSE
-    )
-    TABLESPACE pg_default;
-    """.format(schema=options.schema)
 
-    logging.debug(sql)
-    if not options.simulate:
-        a.execute(sql)
-    
+
     # Create location table
     sql = """
     CREATE TABLE {schema}.location
     (
       id SERIAL,
-      name character varying(254) COLLATE pg_catalog."default",
+      name character varying(254),
       lat numeric,
       lon numeric,
       geom geometry
@@ -70,10 +48,53 @@ def main():
     TABLESPACE pg_default;
     """.format(schema=options.schema)
     logging.debug(sql)
-
     if not options.simulate:
         a.execute(sql)
 
+    sql = "CREATE INDEX loc_idx ON {schema}.location USING GIST (geom)".format(schema=options.schema)
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)
+            
+    # Create data table
+    sql = """
+    CREATE TABLE {schema}.data
+    (
+      id SERIAL PRIMARY KEY,
+      type character varying(254),
+      dataset character varying(254),
+      "time" TIMESTAMP,
+      location_id bigint REFERENCES {schema}.data ON DELETE NO ACTION,
+      parameter character varying(254),
+      value double precision,
+      "row" character varying(254)
+    )
+    WITH (
+      OIDS = FALSE
+    )
+    TABLESPACE pg_default;
+    """.format(schema=options.schema)
+
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)
+
+    # Indexes
+    sql = "CREATE INDEX row_idx ON {schema}.data (row)".format(schema=options.schema)
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)    
+
+    # sql = "CREATE INDEX location_id_idx ON {schema}.data (location_id)".format(schema=options.schema)
+    # logging.debug(sql)
+    #if not options.simulate:
+    #    a.execute(sql)    
+
+    sql = "CREATE INDEX parameter_idx ON {schema}.data (parameter)".format(schema=options.schema)
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)
+        
     #sql = "ALTER TABLE traindata_test.location OWNER to weatherproof_rw;"
     
 if __name__=='__main__':
