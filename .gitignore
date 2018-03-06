@@ -3,3 +3,5 @@ api/cnf/database.ini
 \#*\#
 .\#*
 *.pyc
+.DS_Store
+data
