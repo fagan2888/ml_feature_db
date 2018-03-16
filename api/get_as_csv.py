@@ -24,6 +24,10 @@ def main():
     logging.debug('Shape of data {}'.format(data.shape))
     logging.debug('Header is: {}'.format(','.join(header)))
 
+    print(header)
+    print(np.array(metadata))
+    print(data)
+    
     # TODO saving as csv
     
     # Serialize model to disc

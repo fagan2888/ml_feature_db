@@ -51,10 +51,10 @@ def main():
     if not options.simulate:
         a.execute(sql)
 
-    sql = "CREATE INDEX loc_idx ON {schema}.location USING GIST (geom)".format(schema=options.schema)
-    logging.debug(sql)
-    if not options.simulate:
-        a.execute(sql)
+    #sql = "CREATE INDEX loc_idx ON {schema}.location USING GIST (geom)".format(schema=options.schema)
+    #logging.debug(sql)
+    #if not options.simulate:
+    #    a.execute(sql)
             
     # Create data table
     sql = """
@@ -80,20 +80,20 @@ def main():
         a.execute(sql)
 
     # Indexes
-    sql = "CREATE INDEX row_idx ON {schema}.data (row)".format(schema=options.schema)
-    logging.debug(sql)
-    if not options.simulate:
-        a.execute(sql)    
+    #sql = "CREATE INDEX row_idx ON {schema}.data (row)".format(schema=options.schema)
+    #logging.debug(sql)
+    #if not options.simulate:
+    #    a.execute(sql)    
 
     # sql = "CREATE INDEX location_id_idx ON {schema}.data (location_id)".format(schema=options.schema)
     # logging.debug(sql)
     #if not options.simulate:
     #    a.execute(sql)    
 
-    sql = "CREATE INDEX parameter_idx ON {schema}.data (parameter)".format(schema=options.schema)
-    logging.debug(sql)
-    if not options.simulate:
-        a.execute(sql)
+    #sql = "CREATE INDEX parameter_idx ON {schema}.data (parameter)".format(schema=options.schema)
+    #logging.debug(sql)
+    #if not options.simulate:
+    #    a.execute(sql)
         
     #sql = "ALTER TABLE traindata_test.location OWNER to weatherproof_rw;"
     

@@ -125,7 +125,6 @@ class mlfb(object):
                     metadata.append([row[1], row[0], row[2], row[3]])
                 else:
                     logging.error('Row with id {} has wrong length of {} while it should be {}'.format(row_id, len(resrow), len(header)))
-                    print(resrow)
 
                 resrow = [row[5]]
                 if row[4] not in header:
@@ -184,6 +183,7 @@ class mlfb(object):
                    optional dataset information
         """
 
+        self._connect()
         logging.info('Trying to insert {} {}s with dataset {}'.format(len(data), _type, dataset))
         logging.debug('Length of header: {}'.format(len(header)))
         logging.debug('Shape of data: {}'.format(data.shape))
@@ -212,7 +212,7 @@ class mlfb(object):
                 j += 1                        
             i +=1
 
-        # logging.debug(sql)
+        logging.debug(sql)
         self.execute(sql)        
 
     def remove_dataset(self, dataset, type=None, clean_locations=False):
@@ -228,13 +228,16 @@ class mlfb(object):
         """
 
         # Remove dataset
+        logging.debug('Removing dataset "{}"'.format(dataset))
         sql = "DELETE FROM {schema}.data WHERE dataset='{dataset}'".format(schema=self.schema, dataset=dataset)
         if type is not None:
             sql += " AND type='{type}'".format(type=type)
+        logging.debug(sql)
         self.execute(sql)
         
         # Clean locations
         if clean_locations:
+            logging.debug('Removing locations...')
             sql = "DELETE FROM {schema}.location WHERE id NOT IN (SELECT location_id FROM {schema}.data)".format(schema=self.schema)
             self.execute(sql)
         

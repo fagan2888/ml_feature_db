@@ -70,7 +70,11 @@ def main():
     """
 
     a = mlfb.mlfb()
-    X = read_data(options.filename, delimiter=',', remove='"')    
+    X = read_data(options.filename, delimiter=',', remove='"')
+
+    if options.num_of_rows > 0:
+        X = X[0:options.num_of_rows]
+            
     stations = get_stations(filename='data/stations.json')
 
     locations = []
@@ -102,7 +106,7 @@ def main():
             logging.error('No location data for {}'.format(loc))
             continue
 
-    a.add_rows('label', header, data, metadata, dataset='tehanu-1-2')
+    a.add_rows('label', header, np.array(data), metadata, dataset=options.dataset)
     
 if __name__=='__main__':
 
@@ -111,6 +115,14 @@ if __name__=='__main__':
     parser.add_argument('--add_locations',
                         action='store_true',
                         help='If set, locations are inserted into db, default=False')
+    parser.add_argument('--dataset',
+                        type=str,
+                        default='trains',
+                        help='dataset name')
+    parser.add_argument('--num_of_rows',
+                        type=int,
+                        default=-1,
+                        help='dataset name')    
     parser.add_argument('--logging_level',
                         type=str,
                         default='INFO',
