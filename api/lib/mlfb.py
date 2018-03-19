@@ -125,7 +125,6 @@ class mlfb(object):
                     metadata.append([row[1], row[0], row[2], row[3]])
                 else:
                     logging.error('Row with id {} has wrong length of {} while it should be {}'.format(row_id, len(resrow), len(header)))
-                    print(resrow)
 
                 resrow = [row[5]]
                 if row[4] not in header:
@@ -141,17 +140,20 @@ class mlfb(object):
         locations : list
                     location information in following format: ['name', 'lat', 'lon']
         """
+        self._connect()
 
+        logging.info('Adding {} locations to db...'.format(len(locations)))
+        
         ids = []
         if check_for_duplicates:
             for loc in locations:
                 id = self.get_location_by_name(loc[0])
             
                 if id is not None:
-                    logging.debug('Found id {} for location named {}'.format(id, loc[0]))
+                    logging.info('Found id {} for location named {}'.format(id, loc[0]))
                     ids.append(id)
                 else:
-                    logging.debug('Location with name {} not found, creating...'.format(loc[0]))
+                    logging.info('Location with name {} not found, creating...'.format(loc[0]))
                     sql = "INSERT INTO {schema}.location (name, geom) VALUES ('{name}', ST_GeomFromText('POINT({lon} {lat})'))".format(name=loc[0], lat=loc[1], lon=loc[2], schema=self.schema)
                     # logging.debug(sql)
                     self.execute(sql)
@@ -168,7 +170,7 @@ class mlfb(object):
                 sql = sql + "('{name}', ST_GeomFromText('POINT({lon} {lat})'))".format(name=loc[0], lat=loc[1], lon=loc[2])
             self.execute(sql)
 
-    def add_rows(self, _type, header, data, metadata, dataset):
+    def add_rows(self, _type, header, data, metadata, dataset, row_offset=0):
         """
         Add rows to the db
         
@@ -182,19 +184,23 @@ class mlfb(object):
                    list containing metadata in following order ['time', 'location_id']
         dataset   : str
                    optional dataset information
+        row_offset : int
+                     offset for row numbering (used if adding rows is split to batches)
         """
 
-        logging.info('Trying to insert {} {}s with dataset {}'.format(len(data), _type, dataset))
+        logging.debug('Trying to insert {} {}s with dataset {}'.format(len(data), _type, dataset))
         logging.debug('Length of header: {}'.format(len(header)))
         logging.debug('Shape of data: {}'.format(data.shape))
         logging.debug('Length of metadata: {}'.format(len(metadata)))
+
+        self._connect()
         
         sql = "INSERT INTO {schema}.data (type, dataset, time, location_id, parameter, value, row) VALUES ".format(schema=self.schema)
         i = 0
         first = True
         for row in data:            
             j = 0
-            row = dataset+'-'+str(i)
+            row = dataset+'-'+str(i+row_offset)
             for param in header:
                 if metadata[i][1] is None:
                     logging.error('No location for row {}'.format(i))
@@ -212,8 +218,9 @@ class mlfb(object):
                 j += 1                        
             i +=1
 
-        # logging.debug(sql)
-        self.execute(sql)        
+        #logging.debug(sql)
+        self.execute(sql)
+        return i
 
     def remove_dataset(self, dataset, type=None, clean_locations=False):
         """
