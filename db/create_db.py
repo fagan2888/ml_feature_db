@@ -7,6 +7,7 @@ import datetime as dt
 import json
 import itertools
 import numpy as np
+from configparser import ConfigParser
 
 import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -24,6 +25,21 @@ def main():
     logging.info('Using configuration file: {}'.format(config))
     a = mlfb.mlfb(config_filename=config)
 
+    # Create schema
+    parser = ConfigParser()
+    parser.read(config)
+    sql = "CREATE SCHEMA IF NOT EXISTS  {} AUTHORIZATION {}".format(options.schema, parser.items('postgresql')[2][1])
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)
+
+    # Enable PostGIS
+    if options.create_extension:
+        sql = "CREATE EXTENSION postgis"
+        logging.debug(sql)
+        if not options.simulate:
+            a.execute(sql)    
+        
     # Drop old tables
     if options.force:
         sql = "DROP TABLE IF EXISTS {schema}.data, {schema}.location".format(schema=options.schema)
@@ -36,7 +52,7 @@ def main():
     sql = """
     CREATE TABLE {schema}.location
     (
-      id SERIAL,
+      id SERIAL PRIMARY KEY,
       name character varying(254),
       lat numeric,
       lon numeric,
@@ -64,7 +80,7 @@ def main():
       type character varying(254),
       dataset character varying(254),
       "time" TIMESTAMP,
-      location_id bigint REFERENCES {schema}.data ON DELETE NO ACTION,
+      location_id bigint REFERENCES {schema}.location (id) ON DELETE NO ACTION,
       parameter character varying(254),
       value double precision,
       "row" character varying(254)
@@ -105,7 +121,10 @@ if __name__=='__main__':
                         help='If set, existing tables are dropped, default=False')
     parser.add_argument('--simulate',
                         action='store_true',
-                        help='Simulate only, default=False')        
+                        help='Simulate only, default=False')
+    parser.add_argument('--create_extension',
+                        action='store_true',
+                        help='Create postgis extension, default=False')        
     parser.add_argument('--schema',
                         type=str,
                         default='traindata',
