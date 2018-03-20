@@ -71,6 +71,47 @@ class mlfb(object):
             if conn is not None:
                 conn.close()
                 logging.debug('Database connection closed.')
+                
+    def get_rows_from_postgre_to_numpy(self,parameter_in,value_in):
+        """ Method: get data from the trains table Postgre table and return Numpy array with return sentence"""
+        conn = None
+        var1 = 'testa1'
+        try:
+            logging.info(parameter_in,value_in)
+            # logging.info(location_id_in)
+            # logging.info(type_in)
+            params = self.config()
+            conn = psycopg2.connect(**params)
+            cur = conn.cursor()
+            cur.execute("select AA1.parameter,AA1.value,AA1.time,AA1.type,BB2.name,BB2.geom,AA1.id,AA1.location_id from traindata._data AA1 INNER JOIN traindata._location BB2 ON AA1.location_id=BB2.id and AA1.parameter = %s and AA1.value='%s'", (parameter_in,value_in,))
+                            
+            logging.info("The number of training.trains_fmi_trainingdata and location: ", cur.rowcount)
+            row = cur.fetchone()
+
+            
+            # Parse data to numpy array
+            logging.info('Parsing data to np array...')
+            result = []
+ 
+            while row is not None:
+                #logging.info(row)
+                row = cur.fetchone()
+                #result = cur.fetchone()
+                result.append(row)
+
+            
+            result = np.array(result)
+            print(result)
+            return result
+
+
+            # close communication with the database
+            cur.close()
+        except (Exception, psycopg2.DatabaseError) as error:
+            print(error)
+        finally:
+            if conn is not None:
+                conn.close()
 
 
     def get_rows(self, dataset_name, geom_type='point', rowtype='feature'):
