@@ -18,7 +18,7 @@ def main():
     # end_time = dt.datetime.strptime(options.end_time, "%Y%m%d%H%M")
 
     a = mlfb.mlfb(1, logging_level=options.logging_level)
-    metadata, header, data = a.get_rows(options.dataset)
+    metadata, header, data = a.get_rows(options.dataset, rowtype=options.type)
 
     logging.debug('Length of metadata: {}'.format(len(metadata)))
     logging.debug('Shape of data {}'.format(data.shape))
@@ -41,10 +41,11 @@ def main():
 if __name__=='__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--start_time', type=str, help='Start time of the classification data interval')
-    parser.add_argument('--end_time', type=str, help='End time of the classification data interval')
+    parser.add_argument('--starttime', type=str, help='Start time of the classification data interval')
+    parser.add_argument('--endtime', type=str, help='End time of the classification data interval')
     parser.add_argument('--save_path', type=str, default=None, help='Dataset save path and filename')
-    parser.add_argument('--dataset', type=str, default=None, help='Dataset name')    
+    parser.add_argument('--dataset', type=str, default=None, help='Dataset name')
+    parser.add_argument('--type', type=str, default='feature', help='feature/label')
     parser.add_argument('--logging_level',
                         type=str,
                         default='INFO',
