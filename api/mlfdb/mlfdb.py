@@ -7,13 +7,14 @@ import numpy as np
 import os
 import datetime
 from os.path import expanduser
+from google.cloud import storage
 
 class mlfdb(object):
 
     conn = None
     config_filename = None
     schema = 'traindata'
-    id = 1
+    id = 1    
     
     def __init__(self, id=1, logging_level='INFO', config_filename=None, schema='traindata'):
         self.id = id
@@ -23,6 +24,16 @@ class mlfdb(object):
             home = expanduser("~")
             config_filename = home+'/.mlfdbconfig'
             #config_filename = os.path.dirname(os.path.abspath(__file__))+'/../cnf/database.ini'
+        else if config_filename[0:2] == 'gs':
+            bucket_name = re.search('(?<=//).*?(?=/)', config_filename).group(0)
+            blob_name = re.search('(?<=gs://'+bucket_name+'/).*$', config_filename).group(0)
+            tmp_filename = '/tmp/creds'
+            client = storage.Client()
+            bucket = client.get_bucket(bucket_name)
+            blob = storage.Blob(blob_name, bucket)
+            blob.download_to_filename(tmp_filename)
+            config_filename = tmp_filename
+            
         self.config_filename = config_filename
 
 
