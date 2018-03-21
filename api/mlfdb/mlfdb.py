@@ -24,7 +24,7 @@ class mlfdb(object):
             home = expanduser("~")
             config_filename = home+'/.mlfdbconfig'
             #config_filename = os.path.dirname(os.path.abspath(__file__))+'/../cnf/database.ini'
-        else if config_filename[0:2] == 'gs':
+        elif config_filename[0:2] == 'gs':
             bucket_name = re.search('(?<=//).*?(?=/)', config_filename).group(0)
             blob_name = re.search('(?<=gs://'+bucket_name+'/).*$', config_filename).group(0)
             tmp_filename = '/tmp/creds'
