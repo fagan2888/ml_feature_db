@@ -6,7 +6,7 @@ import logging
 import numpy as np
 import os
 import datetime
-from pathlib import Path
+from os.path import expanduser
 
 class mlfdb(object):
 
@@ -20,7 +20,7 @@ class mlfdb(object):
         self.schema = schema
 
         if config_filename is None:
-            home = str(Path.home())
+            home = expanduser("~")
             config_filename = home+'/.mlfdbconfig'
             #config_filename = os.path.dirname(os.path.abspath(__file__))+'/../cnf/database.ini'
         self.config_filename = config_filename
