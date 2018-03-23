@@ -5,6 +5,7 @@ from configparser import ConfigParser
 import logging
 import numpy as np
 import os
+import re
 import datetime
 from os.path import expanduser
 from google.cloud import storage
