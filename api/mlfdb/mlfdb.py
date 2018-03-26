@@ -246,7 +246,6 @@ class mlfdb(object):
 
 
         logging.info('Trying to insert {} {}s with dataset {}'.format(len(data), _type, dataset))
-
         self._connect()
         
         sql = "INSERT INTO {schema}.data (type, dataset, time, location_id, parameter, value, row) VALUES ".format(schema=self.schema)
@@ -266,7 +265,7 @@ class mlfdb(object):
                 else: first = False
 
                 if isinstance(metadata[row_num][0], int):
-                    t =  datetime.datetime.fromtimestamp(int(metadata[row_num][0]))
+                    t = datetime.datetime.fromtimestamp(int(metadata[row_num][0]))
                 else:
                     t = metadata[row_num][0]
                 
