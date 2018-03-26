@@ -250,26 +250,29 @@ class mlfdb(object):
         self._connect()
         
         sql = "INSERT INTO {schema}.data (type, dataset, time, location_id, parameter, value, row) VALUES ".format(schema=self.schema)
-        i = 0
+        i = 0 # <-- for row indexing
         first = True
+        row_num = -1 # <-- for finding correct row
         for row in data:            
-            j = 0
+            j = 0 # <-- for parameter
+            row_num += 1
             row = dataset+'-'+str(i+row_offset)
             for param in header:
-                if metadata[i][1] is None:
-                    logging.error('No location for row {}'.format(i))
+                if metadata[row_num][1] is None:
+                    logging.error('No location for row {} (row: {})'.format(row_num, metadata[row_num]))
                     continue
                 
                 if not first: sql = sql+', '
                 else: first = False
 
-                if isinstance(metadata[i][0], int):
-                    t =  datetime.datetime.fromtimestamp(int(metadata[i][0]))
+                if isinstance(metadata[row_num][0], int):
+                    t =  datetime.datetime.fromtimestamp(int(metadata[row_num][0]))
                 else:
-                    t = metadata[i][0]
+                    t = metadata[row_num][0]
                 
-                sql = sql + "('{_type}', '{dataset}', '{time}', {location_id}, '{parameter}', {value}, '{row}')".format(_type=_type, dataset=dataset, time=t.strftime('%Y-%m-%d %H:%M:%S'), location_id=metadata[i][1], parameter=param, value=data[i][j], row=row)
-                j += 1                        
+                sql = sql + "('{_type}', '{dataset}', '{time}', {location_id}, '{parameter}', {value}, '{row}')".format(_type=_type, dataset=dataset, time=t.strftime('%Y-%m-%d %H:%M:%S'), location_id=metadata[row_num][1], parameter=param, value=data[row_num][j], row=row)
+                j += 1
+                
             i +=1
 
         #logging.debug(sql)
