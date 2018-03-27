@@ -270,7 +270,7 @@ class mlfdb(object):
                 else:
                     t = metadata[row_num][0]
 
-                row = _type+'-'+dataset+'-'+t.timestamp()+'-'+str(i+row_offset)
+                row = _type+'-'+dataset+'-'+str(t.timestamp())+'-'+str(i+row_offset)
                     
                 sql = sql + "('{_type}', '{dataset}', '{time}', {location_id}, '{parameter}', {value}, '{row}')".format(_type=_type, dataset=dataset, time=t.strftime('%Y-%m-%d %H:%M:%S'), location_id=metadata[row_num][1], parameter=param, value=data[row_num][j], row=row)
                 j += 1
