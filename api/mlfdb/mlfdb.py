@@ -257,7 +257,6 @@ class mlfdb(object):
         for row in data:            
             j = 0 # <-- for parameter
             row_num += 1
-            row = dataset+'-'+str(i+row_offset)
             for param in header:
                 if metadata[row_num][1] is None:
                     logging.error('No location for row {} (row: {})'.format(row_num, metadata[row_num]))
@@ -270,7 +269,9 @@ class mlfdb(object):
                     t = datetime.datetime.fromtimestamp(int(metadata[row_num][0]))
                 else:
                     t = metadata[row_num][0]
-                
+
+                row = _type+'-'+dataset+'-'+t.timestamp()+'-'+str(i+row_offset)
+                    
                 sql = sql + "('{_type}', '{dataset}', '{time}', {location_id}, '{parameter}', {value}, '{row}')".format(_type=_type, dataset=dataset, time=t.strftime('%Y-%m-%d %H:%M:%S'), location_id=metadata[row_num][1], parameter=param, value=data[row_num][j], row=row)
                 j += 1
                 
