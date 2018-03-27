@@ -226,25 +226,27 @@ class mlfdb(object):
                 sql = sql + "('{name}', ST_GeomFromText('POINT({lon} {lat})'))".format(name=loc[0], lat=loc[1], lon=loc[2])
             self.execute(sql)
 
-    def add_rows(self, _type, header, data, metadata, dataset, row_offset=0):
+    def add_rows(self, _type, header, data, metadata, dataset, row_prefix='', row_offset=0):
         """
         Add rows to the db
         
-        type     : str
-                   feature or label
-        header   : list        
-                   list containing data header (i.e. 'temperature';'windspeedms')
-        data     : np.array      
-                   numpy array or similar containing data in the same order with header
-        metadata : list
-                   list containing metadata in following order ['time', 'location_id']
-        dataset   : str
-                   optional dataset information
+        type       : str
+                     feature or label
+        header     : list        
+                     list containing data header (i.e. 'temperature';'windspeedms')
+        data       : np.array      
+                     numpy array or similar containing data in the same order with header
+        metadata   : list
+                     list containing metadata in following order ['time', 'location_id']
+        dataset    : str
+                     optional dataset information
+        row_prefix : str
+                     row prefix to add (used if adding rows is done in paraller)
         row_offset : int
                      offset for row numbering (used if adding rows is split to batches)
+
+        return int amount of added rows
         """
-
-
         logging.info('Trying to insert {} {}s with dataset {}'.format(len(data), _type, dataset))
         self._connect()
         
