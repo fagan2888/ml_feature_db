@@ -247,7 +247,7 @@ class mlfdb(object):
 
         return int amount of added rows
         """
-        logging.info('Trying to insert {} {}s with dataset {}'.format(len(data), _type, dataset))
+        logging.debug('Trying to insert {} {}s with dataset {}'.format(len(data), _type, dataset))
         self._connect()
         
         sql = "INSERT INTO {schema}.data (type, dataset, time, location_id, parameter, value, row) VALUES ".format(schema=self.schema)
