@@ -129,12 +129,18 @@ class mlfdb(object):
                 conn.close()
 
 
-    def get_rows(self, dataset_name, geom_type='point', rowtype='feature'):
+    def get_rows(self, dataset_name,
+                 starttime=None, endtime=None,
+                 geom_type='point', rowtype='feature'):
         """ 
         Get all feature rows from given dataset
         
         dataset_name : str
                        dataset name
+        starttime : DateTime
+                    start time of rows (by default all rows are returned)
+        endtime : DateTime
+                    end time of rows (by default all rows are returned)
         geom_type : ('point'|'wkt')
                     How geometry is returned. If set to point, {'lat' x.xx, 'lon': x.xx} dict is returned. If set to WKT, WKT is returned. Default point
         rowtype : str
@@ -154,8 +160,21 @@ class mlfdb(object):
               FROM {schema}.data a, {schema}.location b 
               WHERE a.location_id = b.id AND a.type='{type}' 
                 AND a.row is not null AND a.dataset='{dataset}'
-              ORDER BY a.row, t, a.location_id, a.parameter
-              """.format(schema=self.schema, dataset=dataset_name, type=rowtype)
+        """.format(schema=self.schema, dataset=dataset_name, type=rowtype)
+
+        if starttime is not None:
+            sql += """
+             AND a.time >= '{starttime}'
+            """.format(starttime=starttime.strftime('%Y-%m-%d %H:%M:%S'))
+
+        if endtime is not None:
+            sql += """
+             AND a.time >= '{endtime}'
+            """.format(endtime=endtime.strftime('%Y-%m-%d %H:%M:%S'))
+            
+        sql += """
+             ORDER BY a.row, t, a.location_id, a.parameter
+              """
         
         # logging.debug(sql)
         rows = self._query(sql)
