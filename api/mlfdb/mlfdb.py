@@ -205,8 +205,19 @@ class mlfdb(object):
                 if row[4] not in header:
                     header.append(row[4])
                 prev_row_id = row_id
+
+        data = np.array(result)
+        
+        logging.debug('{} \n'.format(rowtype))
+        logging.debug('Header is: \n {} \n'.format(','.join(header)))
+    
+        logging.debug('Shape of metadata: {}'.format(np.array(metadata).shape))
+        logging.debug('Sample of metadata: \n {} \n'.format(np.array(metadata)))
+    
+        logging.debug('Shape of data {}'.format(data.shape))
+        logging.debug('Sample of data: \n {} \n '.format(data))
                 
-        return metadata, header, np.array(result)
+        return metadata, header, data
 
     def add_point_locations(self, locations, check_for_duplicates=False):
         """
