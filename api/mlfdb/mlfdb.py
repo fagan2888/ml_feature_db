@@ -173,10 +173,10 @@ class mlfdb(object):
             """.format(endtime=endtime.strftime('%Y-%m-%d %H:%M:%S'))
             
         sql += """
-             ORDER BY a.row, t, a.location_id, a.parameter
+             ORDER BY a.row, t, a.location_id, a.parameter, a.time
               """
         
-        # logging.debug(sql)
+        logging.debug(sql)
         rows = self._query(sql)
 
         result = []
