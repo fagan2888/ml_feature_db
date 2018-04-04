@@ -169,7 +169,7 @@ class mlfdb(object):
 
         if endtime is not None:
             sql += """
-             AND a.time >= '{endtime}'
+             AND a.time <= '{endtime}'
             """.format(endtime=endtime.strftime('%Y-%m-%d %H:%M:%S'))
             
         sql += """
