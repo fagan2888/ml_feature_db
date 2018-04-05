@@ -9,6 +9,7 @@ import re
 import datetime
 from os.path import expanduser
 from google.cloud import storage
+import pandas as pd
 
 class mlfdb(object):
 
@@ -256,7 +257,7 @@ class mlfdb(object):
                 sql = sql + "('{name}', ST_GeomFromText('POINT({lon} {lat})'))".format(name=loc[0], lat=loc[1], lon=loc[2])
             self.execute(sql)
 
-    def add_rows(self, _type, header, data, metadata, dataset, row_prefix='', row_offset=0):
+    def add_rows(self, _type, header, data, metadata, dataset, row_prefix='', row_offset=0, check_uniq=False):
         """
         Add rows to the db
         
@@ -385,6 +386,50 @@ class mlfdb(object):
         sql += " FROM {schema}.location WHERE id IN (SELECT location_id FROM {schema}.data WHERE dataset='{dataset}')".format(schema=self.schema, dataset=dataset)
         # logging.debug(sql)
         return self._query(sql)        
+
+    def clean_duplicate_rows(self, dataset, rowtype, correct_length):
+        """
+        Clean duplicate rows. Note! only first 1000 rows are handled.
+        
+        dataset : str
+                  name of dataset
+        rowtype : str
+                  feature | label        
+        correct_length : int
+                         correct length of the row
+
+        returns : int 
+                  count of cleaned rows
+        """
+        self._connect()
+        sql = "SELECT row, count(1) c FROM {schema}.data WHERE type='{rowtype}' and dataset='{dataset}' GROUP BY row ORDER BY c DESC LIMIT 1000".format(schema=self.schema, rowtype=rowtype, dataset=dataset)
+
+        logging.debug(sql)
+        rows = self._query(sql)
+
+        duplicates = []
+        for row in rows:
+            if row[1] > correct_length:
+                duplicates.append(row[0])
+
+
+        sql = "SELECT id,type,dataset,time,location_id,parameter,row FROM {schema}.data WHERE type='{rowtype}' and dataset='{dataset}' AND row IN ({duplicates})".format(schema=self.schema, rowtype=rowtype, dataset=dataset, duplicates='\''+'\',\''.join(duplicates)+'\'')
+        logging.debug(sql)
+        
+        rows = self._query(sql)
+
+        df = pd.DataFrame(rows)
+        mask = df.duplicated([1,2,3,4,5,6]).as_matrix()
+        ids = df.as_matrix()
+        ids = ids[(mask)][:,0]
+        logging.debug(ids.shape)
+        logging.debug(ids)
+
+        sql = "DELETE FROM {schema}.data WHERE id IN ({ids})".format(schema=self.schema, ids=','.join(list(map(str,ids))))
+        logging.debug(sql)
+
+        self.execute(sql)
+        return len(ids)
         
     def execute(self, statement):
 
