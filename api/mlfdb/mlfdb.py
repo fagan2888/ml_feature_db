@@ -213,7 +213,7 @@ class mlfdb(object):
         logging.debug('Header is: \n {} \n'.format(','.join(header)))
     
         logging.debug('Shape of metadata: {}'.format(np.array(metadata).shape))
-        logging.debug('Sample of metadata: \n {} \n'.format(np.array(metadata)))
+        logging.debug('Sample of metadata: \n {} \n'.format(np.array(metadata[0:10])))
     
         logging.debug('Shape of data {}'.format(data.shape))
         logging.debug('Sample of data: \n {} \n '.format(data))
