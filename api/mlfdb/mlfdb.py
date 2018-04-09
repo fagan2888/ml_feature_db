@@ -296,7 +296,7 @@ class mlfdb(object):
                 if not first: sql = sql+', '
                 else: first = False
 
-                if isinstance(metadata[row_num][0], int):
+                if isinstance(metadata[row_num][0], int) or isinstance(metadata[row_num][0], float):
                     t = datetime.datetime.fromtimestamp(int(metadata[row_num][0]))
                 else:
                     t = metadata[row_num][0]
