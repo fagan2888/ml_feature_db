@@ -195,18 +195,20 @@ class mlfdb(object):
                 if row[4] not in header:
                     header.append(row[4])
                 prev_row_id = row_id
+                prev_metadata_row = [row[1], row[0], row[2], row[3]]
             else:                
                 if len(resrow) == len(header):
                     result.append(resrow)
-                    metadata.append([row[1], row[0], row[2], row[3]])
+                    metadata.append(prev_metadata_row)
                 else:
                     logging.error('Row with id {} has wrong length of {} while it should be {}'.format(row_id, len(resrow), len(header)))
 
                 resrow = [row[5]]
                 if row[4] not in header:
-                    header.append(row[4])
+                    header.append(row[4])                    
                 prev_row_id = row_id
-
+                prev_metadata_row = [row[1], row[0], row[2], row[3]]
+                
         data = np.array(result)
         
         logging.debug('{} \n'.format(rowtype))
