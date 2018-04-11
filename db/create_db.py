@@ -32,14 +32,19 @@ def main():
     logging.debug(sql)
     if not options.simulate:
         a.execute(sql)
-
+    
     # Enable PostGIS
     if options.create_extension:
         sql = "CREATE EXTENSION postgis"
         logging.debug(sql)
         if not options.simulate:
             a.execute(sql)    
-        
+
+    sql = "SET SEARCH_PATH TO '{}, default'".format(options.schema)
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)
+    
     # Drop old tables
     if options.force:
         sql = "DROP TABLE IF EXISTS {schema}.data, {schema}.location".format(schema=options.schema)
@@ -48,6 +53,81 @@ def main():
             a.execute(sql)
 
 
+    # Create partition functions
+    sql = """
+    CREATE OR REPLACE FUNCTION create_partition(IN base_name text,
+    IN for_time timestamp)
+    RETURNS VOID AS
+    $BODY$
+    DECLARE
+      table_name text;
+    BEGIN
+      table_name := base_name || TO_CHAR(for_time, '_YY_MM');
+    
+      EXECUTE 'CREATE TABLE IF NOT EXISTS ' || table_name ||
+          '(LIKE ' || base_name || ' INCLUDING ALL,
+              CHECK(time >= DATE ''' || date_trunc('month', for_time) ||
+                  ''' and time < DATE ''' ||
+                  date_trunc('month', for_time + '1 months'::interval) || ''')
+           ) INHERITS (' || base_name || ')';
+    END
+    $BODY$
+      LANGUAGE PLpgSQL
+      STRICT
+      VOLATILE
+      EXTERNAL SECURITY INVOKER;
+    """
+
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)
+
+
+    sql = """
+    CREATE OR REPLACE FUNCTION trg_insert_data()
+    RETURNS TRIGGER AS $$
+    DECLARE
+      old_time {schema}.data.time%TYPE := NULL;
+    BEGIN
+      -- Here we use time to insert into appropriate partition
+      EXECUTE 'insert into {schema}.data_' || to_char(NEW.time, 'YY_MM') ||
+          ' values ( $1.* )' USING NEW;
+    
+      -- Prevent insertion into master table
+      RETURN NULL;
+    EXCEPTION
+    WHEN undefined_table THEN
+      -- Use exclusive advisory lock to prevent two transactions
+      -- trying to create new partition at the same time
+      PERFORM pg_advisory_xact_lock('{schema}.data'::regclass::oid::integer);
+ 
+      -- Create a new partition if another transaction didn't already do it
+      PERFORM create_partition('{schema}.data', NEW.time);
+ 
+      -- Try the insert again
+      EXECUTE 'insert into {schema}.data_' || to_char(NEW.time, 'YY_MM') ||
+          ' values ( $1.* )' USING NEW;
+    
+      -- Prevent insertion into master table
+      RETURN NULL;
+    END;
+    $$
+    LANGUAGE plpgsql;""".format(schema=options.schema)
+    
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)
+
+    sql = """
+    CREATE TRIGGER data_insert BEFORE INSERT
+      ON {schema}.data FOR EACH ROW
+      EXECUTE PROCEDURE trg_insert_data(); 
+    COMMIT; """.format(schema=options.schema)
+
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)
+            
     # Create location table
     sql = """
     CREATE TABLE {schema}.location
@@ -67,10 +147,10 @@ def main():
     if not options.simulate:
         a.execute(sql)
 
-    #sql = "CREATE INDEX loc_idx ON {schema}.location USING GIST (geom)".format(schema=options.schema)
-    #logging.debug(sql)
-    #if not options.simulate:
-    #    a.execute(sql)
+    sql = "CREATE INDEX loc_idx ON {schema}.location USING GIST (geom)".format(schema=options.schema)
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)
             
     # Create data table
     sql = """
@@ -96,15 +176,15 @@ def main():
         a.execute(sql)
 
     # Indexes
-    #sql = "CREATE INDEX row_idx ON {schema}.data (row)".format(schema=options.schema)
-    #logging.debug(sql)
-    #if not options.simulate:
-    #    a.execute(sql)    
+    sql = "CREATE INDEX row_idx ON {schema}.data (row)".format(schema=options.schema)
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)    
 
-    # sql = "CREATE INDEX location_id_idx ON {schema}.data (location_id)".format(schema=options.schema)
-    # logging.debug(sql)
-    #if not options.simulate:
-    #    a.execute(sql)    
+    sql = "CREATE INDEX location_id_idx ON {schema}.data (location_id)".format(schema=options.schema)
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)    
 
     #sql = "CREATE INDEX parameter_idx ON {schema}.data (parameter)".format(schema=options.schema)
     #logging.debug(sql)
