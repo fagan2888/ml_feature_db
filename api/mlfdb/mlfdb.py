@@ -131,77 +131,102 @@ class mlfdb(object):
 
 
     def get_rows(self, dataset_name,
-                 starttime=None, endtime=None,
+                 starttime, endtime,
                  rowtype='feature',
-                 return_type='np', parameters=[]):
+                 return_type='np',
+                 parameters=[],
+                 chunk_size=1456):
         """ 
         Get all feature rows from given dataset
         
         dataset_name : str
                        dataset name
         starttime : DateTime
-                    start time of rows (by default all rows are returned)
+                    start time of rows ( data fetched from ]starttime, endtime] )
         endtime : DateTime
-                    end time of rows (by default all rows are returned)
+                    end time of rows ( data fetched from ]starttime, endtime] )
         rowtype : str
                   Type of rows to be returned (default feature)
+        return_type : str
+                      whether to return np arrays or pandas dataframe (np|pandas, default np)
+        parameters : list
+                     list of parameters to fetch. If omited all distinct parameters from the first 100 rows are fetched
+        chunk_size : int
+                     how large time chunks are used while reading the data from db (to save db memory)
+        
+        returns : np array, np array, np array or pandas DataFrame depending on return_type         
         """
 
-        startstr = starttime.strftime('%Y-%m-%d %H:%M:%S')
-        endstr = endtime.strftime('%Y-%m-%d %H:%M:%S')
+        start = starttime
+        end = starttime
+        data = []
         
-        if len(parameters) == 0:
-            sql = "SELECT DISTINCT(parameter) FROM (SELECT parameter FROM {schema}.data a WHERE dataset='{dataset}' AND type='{type}' AND a.time >= '{starttime}' and a.time <= '{endtime}' LIMIT 100) AS parameter".format(schema=self.schema, dataset=dataset_name, type=rowtype, starttime=startstr, endtime=endstr)
+        # Do long queries in chunks to save database memory        
+        while end < endtime:
+            end = start + datetime.timedelta(days=chunk_size)
+            if end > endtime: end = endtime
+                    
+            startstr = start.strftime('%Y-%m-%d %H:%M:%S')
+            endstr = end.strftime('%Y-%m-%d %H:%M:%S')
+        
+            if len(parameters) == 0:
+                sql = "SELECT DISTINCT(parameter) FROM (SELECT parameter FROM {schema}.data a WHERE dataset='{dataset}' AND type='{type}' AND a.time >= '{starttime}' and a.time <= '{endtime}' LIMIT 100) AS parameter".format(schema=self.schema, dataset=dataset_name, type=rowtype, starttime=startstr, endtime=endstr)
+                
+                logging.debug(sql)
+                rows = self._query(sql)
+                for row in rows:
+                    parameters.append(row[0])
 
-            logging.debug(sql)
-            rows = self._query(sql)
-            for row in rows:
-                parameters.append(row[0])
-
-        logging.debug('Fetching following parameters: {}'.format(parameters))
-        if len(parameters) == 0:
-            raise ValueError('Empty parameter set')
+            logging.debug('Fetching following parameters: {}'.format(parameters))
+            if len(parameters) == 0:
+                raise ValueError('Empty parameter set')
             
-        sql = """
-        SELECT
-            row_info[1] as location_id, row_info[2] as t, ST_x(b.geom) as lon, ST_y(b.geom) as lat, {params}
-        FROM
-          crosstab ($$
+            sql = """
             SELECT
+            row_info[1] as location_id, row_info[2] as t, ST_x(b.geom) as lon, ST_y(b.geom) as lat, {params}
+            FROM
+            crosstab ($$
+              SELECT
          	ARRAY[cast(a.location_id as integer), cast(extract(epoch from a.time) as integer)] as row_info,
                 parameter,
                 a.value
-            FROM
-              {schema}.data a
-            WHERE
-              a.type = '{type}'
-              AND dataset = '{dataset}'
-              AND a.time >= '{starttime}'
-              AND a.time <= '{endtime}'
-              AND (1=1""".format(type=rowtype, dataset=dataset_name, params=', '.join(parameters), starttime=startstr, endtime=endstr, schema=self.schema)
+              FROM
+                {schema}.data a
+              WHERE
+                a.type = '{type}'
+                AND dataset = '{dataset}'
+                AND a.time > '{starttime}'
+                AND a.time <= '{endtime}'
+                AND (1=1""".format(type=rowtype, dataset=dataset_name, params=', '.join(parameters), starttime=startstr, endtime=endstr, schema=self.schema)
+            
+            for param in parameters:
+                sql += ' OR parameter=\'{param}\''.format(param=param)
+            sql += ')$$) as ct(row_info int[]'
+            for param in parameters:
+                sql += ', {param} float8'.format(param=param)
+            sql += """)        
+            LEFT JOIN {schema}.location b ON ct.row_info[1] = b.id
+            """.format(schema=self.schema)       
         
-        for param in parameters:
-            sql += ' OR parameter=\'{param}\''.format(param=param)
-        sql += ')$$) as ct(row_info int[]'
-        for param in parameters:
-            sql += ', {param} float8'.format(param=param)
-        sql += """)        
-        LEFT JOIN {schema}.location b ON ct.row_info[1] = b.id
-        """.format(schema=self.schema)       
-        
-        logging.debug(sql)
-        rows = self._query(sql)
+            logging.debug(sql)
+            newrows = self._query(sql)
+            logging.debug('{} new rows loaded from db...'.format(len(newrows)))
+            data += newrows
+            
+            start = end
 
-        if len(rows) == 0:
+        logging.debug('{} rows loaded from db'.format(len(data)))
+                      
+        if len(data) == 0:
             if return_type == 'pandas':
                 return pd.DataFrame()
             else:
                 return [], [], []
         
         if return_type == 'pandas':
-            return pd.DataFrame(rows)            
+            return pd.DataFrame(data)
         else:            
-            data = np.array(rows)
+            data = np.array(data)
             metadata = data[:,0:4]
             data = data[:,4:]
             logging.debug('{} \n'.format(rowtype))
