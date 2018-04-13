@@ -40,6 +40,13 @@ def main():
         if not options.simulate:
             a.execute(sql)    
 
+    # Enable table func
+    if options.create_extension:
+        sql = "CREATE EXTENSION tablefunc"
+        logging.debug(sql)
+        if not options.simulate:
+            a.execute(sql)    
+            
     sql = "SET SEARCH_PATH TO '{}, default'".format(options.schema)
     logging.debug(sql)
     if not options.simulate:

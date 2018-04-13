@@ -132,7 +132,8 @@ class mlfdb(object):
 
     def get_rows(self, dataset_name,
                  starttime=None, endtime=None,
-                 geom_type='point', rowtype='feature'):
+                 rowtype='feature',
+                 return_type='np', parameters=[]):
         """ 
         Get all feature rows from given dataset
         
@@ -142,85 +143,77 @@ class mlfdb(object):
                     start time of rows (by default all rows are returned)
         endtime : DateTime
                     end time of rows (by default all rows are returned)
-        geom_type : ('point'|'wkt')
-                    How geometry is returned. If set to point, {'lat' x.xx, 'lon': x.xx} dict is returned. If set to WKT, WKT is returned. Default point
         rowtype : str
                   Type of rows to be returned (default feature)
         """
 
-        sql = """
-             SELECT b.id, EXTRACT(epoch from a.time) as t
-             """
-        if geom_type == 'point':            
-            sql += ", ST_x(geom) as lon, ST_y(geom) as lat,"
-        else:
-            sql += ", ST_AsText(geom) as wkt, 1,"
+        startstr = starttime.strftime('%Y-%m-%d %H:%M:%S')
+        endstr = endtime.strftime('%Y-%m-%d %H:%M:%S')
+        
+        if len(parameters) == 0:
+            sql = "SELECT DISTINCT(parameter) FROM (SELECT parameter FROM {schema}.data a WHERE dataset='{dataset}' AND type='{type}' AND a.time >= '{starttime}' and a.time <= '{endtime}' LIMIT 100) AS parameter".format(schema=self.schema, dataset=dataset_name, type=rowtype, starttime=startstr, endtime=endstr)
 
-        sql += """ 
-              a.parameter, a.value, a.row 
-              FROM {schema}.data a, {schema}.location b 
-              WHERE a.location_id = b.id AND a.type='{type}' 
-                AND a.row is not null AND a.dataset='{dataset}'
-        """.format(schema=self.schema, dataset=dataset_name, type=rowtype)
+            logging.debug(sql)
+            rows = self._query(sql)
+            for row in rows:
+                parameters.append(row[0])
 
-        if starttime is not None:
-            sql += """
-             AND a.time >= '{starttime}'
-            """.format(starttime=starttime.strftime('%Y-%m-%d %H:%M:%S'))
-
-        if endtime is not None:
-            sql += """
-             AND a.time <= '{endtime}'
-            """.format(endtime=endtime.strftime('%Y-%m-%d %H:%M:%S'))
+        logging.debug('Fetching following parameters: {}'.format(parameters))
+        if len(parameters) == 0:
+            raise ValueError('Empty parameter set')
             
-        sql += """
-             ORDER BY a.row, t, a.location_id, a.parameter, a.time
-              """
+        sql = """
+        SELECT
+            row_info[1] as location_id, row_info[2] as t, ST_x(b.geom) as lon, ST_y(b.geom) as lat, {params}
+        FROM
+          crosstab ($$
+            SELECT
+         	ARRAY[cast(a.location_id as integer), cast(extract(epoch from a.time) as integer)] as row_info,
+                parameter,
+                a.value
+            FROM
+              {schema}.data a
+            WHERE
+              a.type = '{type}'
+              AND dataset = '{dataset}'
+              AND a.time >= '{starttime}'
+              AND a.time <= '{endtime}'
+              AND (1=1""".format(type=rowtype, dataset=dataset_name, params=', '.join(parameters), starttime=startstr, endtime=endstr, schema=self.schema)
+        
+        for param in parameters:
+            sql += ' OR parameter=\'{param}\''.format(param=param)
+        sql += ')$$) as ct(row_info int[]'
+        for param in parameters:
+            sql += ', {param} float8'.format(param=param)
+        sql += """)        
+        LEFT JOIN {schema}.location b ON ct.row_info[1] = b.id
+        """.format(schema=self.schema)       
         
         logging.debug(sql)
         rows = self._query(sql)
 
-        result = []
-        header = [] #'time', 'lon', 'lat']
-        metadata = []
-        prev_row_id = None
-        resrow = []
-
-        while len(rows) > 0:
-            row = rows.pop(0)
-            row_id = row[6]
-
-            if row_id == prev_row_id or prev_row_id is None:
-                resrow.append(row[5])
-                if row[4] not in header:
-                    header.append(row[4])
-                prev_row_id = row_id
-                prev_metadata_row = [row[1], row[0], row[2], row[3]]
-            else:                
-                if len(resrow) == len(header):
-                    result.append(resrow)
-                    metadata.append(prev_metadata_row)
-                else:
-                    logging.error('Row with id {} has wrong length of {} while it should be {}'.format(row_id, len(resrow), len(header)))
-
-                resrow = [row[5]]
-                if row[4] not in header:
-                    header.append(row[4])                    
-                prev_row_id = row_id
-                prev_metadata_row = [row[1], row[0], row[2], row[3]]
-                
-        data = np.array(result)
+        if len(rows) == 0:
+            if return_type == 'pandas':
+                return pd.DataFrame()
+            else:
+                return [], [], []
         
-        logging.debug('{} \n'.format(rowtype))
-        logging.debug('Header is: \n {} \n'.format(','.join(header)))
+        if return_type == 'pandas':
+            return pd.DataFrame(rows)            
+        else:            
+            data = np.array(rows)
+            metadata = data[:,0:4]
+            data = data[:,4:]
+            logging.debug('{} \n'.format(rowtype))
+            logging.debug('Header is: \n {} \n'.format(','.join(parameters)))
     
-        logging.debug('Shape of metadata: {}'.format(np.array(metadata).shape))
-        logging.debug('Sample of metadata: \n {} \n'.format(np.array(metadata[0:10])))
+            logging.debug('Shape of metadata: {}'.format(np.array(metadata).shape))
+            logging.debug('Sample of metadata: \n {} \n'.format(np.array(metadata[0:10])))
     
-        logging.debug('Shape of data {}'.format(data.shape))
-        logging.debug('Sample of data: \n {} \n '.format(data))
-                
-        return metadata, header, data
+            logging.debug('Shape of data {}'.format(data.shape))
+            logging.debug('Sample of data: \n {} \n '.format(data))        
+        
+            return metadata, parameters, data
 
     def add_point_locations(self, locations, check_for_duplicates=False):
         """
