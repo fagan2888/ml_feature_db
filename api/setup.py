@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='mlfdb',
-      version='0.1',
+      version='0.2',
       description='Machine learning feature db API',
       long_description='Machine learning feature db API',
       classifiers=[
@@ -18,7 +18,8 @@ setup(name='mlfdb',
       install_requires=[
           'psycopg2-binary',
           'configparser',
-          'numpy'
+          'numpy',
+          'pandas'
       ],
       include_package_data=True,
       zip_safe=False)
