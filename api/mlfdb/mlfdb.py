@@ -201,7 +201,9 @@ class mlfdb(object):
             
             for param in parameters:
                 sql += ' OR parameter=\'{param}\''.format(param=param)
-            sql += ')$$) as ct(row_info int[]'
+            sql += """)
+               ORDER BY row_info, parameter
+               $$) as ct(row_info int[]"""
             for param in parameters:
                 sql += ', {param} float8'.format(param=param)
             sql += """)        
@@ -388,24 +390,32 @@ class mlfdb(object):
 
         return None
 
-    def get_locations_by_dataset(self, dataset, geom_type='point'):
+    def get_locations_by_dataset(self, dataset, starttime, endtime, rettype='tuple'):
         """
         Get all locations attached to dataset.
         
         dataset   : str
                     dataset name
-        geom_type : ('point'|'wkt')
-                    How geometry is returned. If set to point, {'lat' x.xx, 'lon': x.xx} dict is returned. If set to WKT, WKT is returned. Default point
+        starttime : DateTime
+                    starttime
+        endtime : DateTime
+                  endtime
+        rettype : str
+                  tuple|dict
+
+        returns list of tuples [(id, name, lon, lat)]
         """        
 
-        sql = "SELECT id, name"
-        if geom_type == 'point':            
-            sql += ", ST_x(geom) as lon, ST_y(geom) as lat"
-        else:
-            sql += ", ST_AsText(geom) as wkt"
-        sql += " FROM {schema}.location WHERE id IN (SELECT location_id FROM {schema}.data WHERE dataset='{dataset}')".format(schema=self.schema, dataset=dataset)
-        # logging.debug(sql)
-        return self._query(sql)        
+        sql = "SELECT id, name, ST_x(geom) as lon, ST_y(geom) as lat"
+        sql += " FROM {schema}.location b WHERE id IN (SELECT location_id FROM {schema}.data a WHERE dataset='{dataset}' AND a.time > '{starttime}' AND a.time <= '{endtime}')".format(schema=self.schema, dataset=dataset, starttime=starttime.strftime('%Y-%m-%d %H:%M:%S'), endtime=endtime.strftime('%Y-%m-%d %H:%M:%S'))
+
+        logging.debug(sql)
+
+        res = self._query(sql)
+        if rettype == 'dict':
+            return self._locs_to_dict(res)
+
+        return res
 
     def clean_duplicate_rows(self, dataset, rowtype, correct_length):
         """
@@ -461,6 +471,18 @@ class mlfdb(object):
         with self.conn as conn:
             with conn.cursor() as curs:
                 curs.execute(statement)
+
+    def _locs_to_dict(self, locs):
+        """
+        Convert locations to dict where id is key 
+        """
+        ret = {}
+        for loc in locs:
+            ret[loc[0]] = {'name': loc[1],
+                           'lon' : loc[2],
+                           'lat' : loc[3]}
+
+        return ret
         
     def _connect(self):
         """ Create connection if needed """
