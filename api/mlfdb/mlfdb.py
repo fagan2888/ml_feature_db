@@ -183,7 +183,7 @@ class mlfdb(object):
             
             sql = """
             SELECT
-            row_info[1] as location_id, row_info[2] as t, ST_x(b.geom) as lon, ST_y(b.geom) as lat, {params}
+            row_info[1] as location_id, row_info[2] as t, ST_x(b.geom) as lon, ST_y(b.geom) as lat, ct.{params}
             FROM
             crosstab ($$
               SELECT
@@ -197,7 +197,7 @@ class mlfdb(object):
                 AND dataset = '{dataset}'
                 AND a.time > '{starttime}'
                 AND a.time <= '{endtime}'
-                AND (1=1""".format(type=rowtype, dataset=dataset_name, params=', '.join(parameters), starttime=startstr, endtime=endstr, schema=self.schema)
+                AND (1=1""".format(type=rowtype, dataset=dataset_name, params=', ct.'.join(parameters), starttime=startstr, endtime=endstr, schema=self.schema)
             
             for param in parameters:
                 sql += ' OR parameter=\'{param}\''.format(param=param)
@@ -279,7 +279,7 @@ class mlfdb(object):
                 sql = sql + "('{name}', ST_GeomFromText('POINT({lon} {lat})'))".format(name=loc[0], lat=loc[1], lon=loc[2])
             self.execute(sql)
 
-    def add_rows(self, _type, header, data, metadata, dataset, row_prefix='', row_offset=0, check_uniq=False):
+    def add_rows(self, _type, header, data, metadata, dataset, row_prefix='', row_offset=0, check_uniq=False, time_column=0, loc_column=1):
         """
         Add rows to the db
         
@@ -318,12 +318,12 @@ class mlfdb(object):
                 if not first: sql = sql+', '
                 else: first = False
 
-                if isinstance(metadata[row_num][0], int) or isinstance(metadata[row_num][0], float):
-                    t = datetime.datetime.fromtimestamp(int(metadata[row_num][0]))
+                if isinstance(metadata[row_num][time_column], int) or isinstance(metadata[row_num][time_column], float):
+                    t = datetime.datetime.fromtimestamp(int(metadata[row_num][time_column]))
                 else:
-                    t = metadata[row_num][0]
+                    t = metadata[row_num][time_column]
 
-                loc_id = metadata[row_num][1]
+                loc_id = metadata[row_num][loc_column]
                 row = _type+'-'+dataset+'-'+str(t.timestamp())+'-'+str(loc_id)+'-'+str(i+row_offset)
                     
                 sql = sql + "('{_type}', '{dataset}', '{time}', {location_id}, '{parameter}', {value}, '{row}')".format(_type=_type, dataset=dataset, time=t.strftime('%Y-%m-%d %H:%M:%S'), location_id=loc_id, parameter=param, value=data[row_num][j], row=row)
