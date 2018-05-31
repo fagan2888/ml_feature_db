@@ -242,8 +242,7 @@ class mlfdb(object):
                 return [], [], []
 
         if return_type == 'pandas':
-            print(parameters)
-            return pd.DataFrame(data, columns=['loc', 'time', 'lon', 'lat'] + parameters)
+            return pd.DataFrame(data, columns=['loc_id', 'time', 'lon', 'lat'] + parameters)
             return pd.DataFrame(data)
         else:
             data = np.array(data)
@@ -296,6 +295,43 @@ class mlfdb(object):
                     first = False
                 sql = sql + "('{name}', ST_GeomFromText('POINT({lon} {lat})'))".format(name=loc[0], lat=loc[1], lon=loc[2])
             self.execute(sql)
+
+    def add_rows_from_df(self, _type, df, dataset, row_prefix='', row_offset=0, time_column='time', loc_column='loc_id'):
+        """
+        Add rows from pandas dataframe
+
+        See add_rows for param descriptions
+        """
+        logging.debug('Trying to insert {} {}s with dataset {}'.format(len(df), _type, dataset))
+        self._connect()
+
+        # we skip metadata and start from first data value
+        columns = list(df.columns.values)[4:]
+
+        sql = "INSERT INTO {schema}.data (type, dataset, time, location_id, parameter, value, row) VALUES ".format(schema=self.schema)
+
+        first = True
+        row_num = -1 # <-- for finding correct row
+        for i, data_row in df.iterrows():
+            j = 4 # <-- for picking parameter, we skip metadata and start from first data value
+            row_num += 1
+            for param in columns:
+                if not first: sql = sql+', '
+                else: first = False
+
+                t = datetime.datetime.fromtimestamp(int(data_row[time_column]))
+                loc_id = data_row[loc_column]
+
+                row = _type+'-'+dataset+'-'+str(t.timestamp())+'-'+str(loc_id)+'-'+str(i+row_offset)
+                #print(data_row)
+                #print(data_row.iloc[j])
+                sql = sql + "('{_type}', '{dataset}', '{time}', {location_id}, '{parameter}', {value}, '{row}')".format(_type=_type, dataset=dataset, time=t.strftime('%Y-%m-%d %H:%M:%S'), location_id=loc_id, parameter=param, value=data_row.iloc[j], row=row)
+                j += 1
+
+        # logging.debug(sql)
+        self.execute(sql)
+        return i
+
 
     def add_rows(self, _type, header, data, metadata, dataset, row_prefix='', row_offset=0, check_uniq=False, time_column=0, loc_column=1):
         """
