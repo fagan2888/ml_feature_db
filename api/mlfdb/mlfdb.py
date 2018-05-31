@@ -16,8 +16,8 @@ class mlfdb(object):
     conn = None
     config_filename = None
     schema = 'traindata'
-    id = 1    
-    
+    id = 1
+
     def __init__(self, id=1, logging_level='INFO', config_filename=None, schema='traindata'):
         self.id = id
         self.schema = schema
@@ -35,7 +35,7 @@ class mlfdb(object):
             blob = storage.Blob(blob_name, bucket)
             blob.download_to_filename(tmp_filename)
             config_filename = tmp_filename
-            
+
         self.config_filename = config_filename
 
 
@@ -87,7 +87,7 @@ class mlfdb(object):
             if conn is not None:
                 conn.close()
                 logging.debug('Database connection closed.')
-                
+
     def get_rows_from_postgre_to_numpy(self,parameter_in,value_in):
         """ Method: get data from the trains table Postgre table and return Numpy array with return sentence"""
         conn = None
@@ -100,22 +100,22 @@ class mlfdb(object):
             conn = psycopg2.connect(**params)
             cur = conn.cursor()
             cur.execute("select AA1.parameter,AA1.value,AA1.time,AA1.type,BB2.name,BB2.geom,AA1.id,AA1.location_id from traindata._data AA1 INNER JOIN traindata._location BB2 ON AA1.location_id=BB2.id and AA1.parameter = %s and AA1.value='%s'", (parameter_in,value_in,))
-                            
+
             logging.info("The number of training.trains_fmi_trainingdata and location: ", cur.rowcount)
             row = cur.fetchone()
 
-            
+
             # Parse data to numpy array
             logging.info('Parsing data to np array...')
             result = []
- 
+
             while row is not None:
                 #logging.info(row)
                 row = cur.fetchone()
                 #result = cur.fetchone()
                 result.append(row)
 
-            
+
             result = np.array(result)
             print(result)
             return result
@@ -136,9 +136,9 @@ class mlfdb(object):
                  return_type='np',
                  parameters=[],
                  chunk_size=1456):
-        """ 
+        """
         Get all feature rows from given dataset
-        
+
         dataset_name : str
                        dataset name
         starttime : DateTime
@@ -153,25 +153,25 @@ class mlfdb(object):
                      list of parameters to fetch. If omited all distinct parameters from the first 100 rows are fetched
         chunk_size : int
                      how large time chunks are used while reading the data from db (to save db memory)
-        
-        returns : np array, np array, np array or pandas DataFrame depending on return_type         
+
+        returns : np array, np array, np array or pandas DataFrame depending on return_type
         """
 
         start = starttime
         end = starttime
         data = []
-        
-        # Do long queries in chunks to save database memory        
+
+        # Do long queries in chunks to save database memory
         while end < endtime:
             end = start + datetime.timedelta(days=chunk_size)
             if end > endtime: end = endtime
-                    
+
             startstr = start.strftime('%Y-%m-%d %H:%M:%S')
             endstr = end.strftime('%Y-%m-%d %H:%M:%S')
-        
+
             if len(parameters) == 0:
                 sql = "SELECT DISTINCT(parameter) FROM (SELECT parameter FROM {schema}.data a WHERE dataset='{dataset}' AND type='{type}' AND a.time >= '{starttime}' and a.time <= '{endtime}' LIMIT 100) AS parameter".format(schema=self.schema, dataset=dataset_name, type=rowtype, starttime=startstr, endtime=endstr)
-                
+
                 logging.debug(sql)
                 rows = self._query(sql)
                 for row in rows:
@@ -180,7 +180,7 @@ class mlfdb(object):
             logging.debug('Fetching following parameters: {}'.format(parameters))
             if len(parameters) == 0:
                 raise ValueError('Empty parameter set')
-            
+
             sql = """
             SELECT
             row_info[1] as location_id, row_info[2] as t, ST_x(b.geom) as lon, ST_y(b.geom) as lat, ct.{params}
@@ -192,72 +192,90 @@ class mlfdb(object):
                 a.value
               FROM
                 {schema}.data a
+              JOIN (
+                VALUES """.format(params=', ct.'.join(parameters), schema=self.schema)
+
+            first = True
+            i = 0
+            for param in parameters:
+                if not first: sql += ", "
+                else: first = False
+                sql += '(\'{}\', {})'.format(param, i)
+                i += 1
+            sql += ') AS x (id, ordering) ON parameter = x.id'
+
+            sql += """
               WHERE
                 a.type = '{type}'
                 AND dataset = '{dataset}'
                 AND a.time > '{starttime}'
                 AND a.time <= '{endtime}'
-                AND (1=1""".format(type=rowtype, dataset=dataset_name, params=', ct.'.join(parameters), starttime=startstr, endtime=endstr, schema=self.schema)
-            
+                AND (""".format(type=rowtype, dataset=dataset_name, params=', ct.'.join(parameters), starttime=startstr, endtime=endstr, schema=self.schema)
+
+            first = True
             for param in parameters:
-                sql += ' OR parameter=\'{param}\''.format(param=param)
+                if not first: sql += " OR "
+                else: first = False
+                sql += 'parameter=\'{param}\''.format(param=param)
             sql += """)
-               ORDER BY row_info, parameter
+               ORDER BY row_info, x.ordering
                $$) as ct(row_info int[]"""
             for param in parameters:
                 sql += ', {param} float8'.format(param=param)
-            sql += """)        
+            sql += """)
             LEFT JOIN {schema}.location b ON ct.row_info[1] = b.id
-            """.format(schema=self.schema)       
-        
+            """.format(schema=self.schema)
+
             logging.debug(sql)
             newrows = self._query(sql)
             logging.debug('{} new rows loaded from db...'.format(len(newrows)))
             data += newrows
-            
+
             start = end
 
         logging.debug('{} rows loaded from db'.format(len(data)))
-                      
+
         if len(data) == 0:
             if return_type == 'pandas':
                 return pd.DataFrame()
             else:
                 return [], [], []
-        
+
         if return_type == 'pandas':
+            print(parameters)
+            return pd.DataFrame(data, columns=['loc', 'time', 'lon', 'lat'] + parameters)
             return pd.DataFrame(data)
-        else:            
+        else:
             data = np.array(data)
             metadata = data[:,0:4]
             data = data[:,4:]
             logging.debug('{} \n'.format(rowtype))
             logging.debug('Header is: \n {} \n'.format(','.join(parameters)))
-    
+
             logging.debug('Shape of metadata: {}'.format(np.array(metadata).shape))
             logging.debug('Sample of metadata: \n {} \n'.format(np.array(metadata[0:10])))
-    
+
             logging.debug('Shape of data {}'.format(data.shape))
-            logging.debug('Sample of data: \n {} \n '.format(data))        
-        
+            logging.debug('Sample of data: \n {} \n '.format(data))
+
             return metadata, parameters, data
 
     def add_point_locations(self, locations, check_for_duplicates=False):
         """
         Add locations to the db
-        
+
         locations : list
                     location information in following format: ['name', 'lat', 'lon']
         """
         self._connect()
 
         logging.info('Adding {} locations to db...'.format(len(locations)))
-        
+
         ids = []
         if check_for_duplicates:
             for loc in locations:
                 id = self.get_location_by_name(loc[0])
-            
+
                 if id is not None:
                     logging.info('Found id {} for location named {}'.format(id, loc[0]))
                     ids.append(id)
@@ -282,12 +300,12 @@ class mlfdb(object):
     def add_rows(self, _type, header, data, metadata, dataset, row_prefix='', row_offset=0, check_uniq=False, time_column=0, loc_column=1):
         """
         Add rows to the db
-        
+
         type       : str
                      feature or label
-        header     : list        
+        header     : list
                      list containing data header (i.e. 'temperature';'windspeedms')
-        data       : np.array      
+        data       : np.array
                      numpy array or similar containing data in the same order with header
         metadata   : list
                      list containing metadata in following order ['time', 'location_id']
@@ -302,19 +320,19 @@ class mlfdb(object):
         """
         logging.debug('Trying to insert {} {}s with dataset {}'.format(len(data), _type, dataset))
         self._connect()
-        
+
         sql = "INSERT INTO {schema}.data (type, dataset, time, location_id, parameter, value, row) VALUES ".format(schema=self.schema)
         i = 0 # <-- for row indexing
         first = True
         row_num = -1 # <-- for finding correct row
-        for row in data:            
+        for row in data:
             j = 0 # <-- for parameter
             row_num += 1
             for param in header:
                 if metadata[row_num][1] is None:
                     logging.error('No location for row {} (row: {})'.format(row_num, metadata[row_num]))
                     continue
-                
+
                 if not first: sql = sql+', '
                 else: first = False
 
@@ -325,10 +343,10 @@ class mlfdb(object):
 
                 loc_id = metadata[row_num][loc_column]
                 row = _type+'-'+dataset+'-'+str(t.timestamp())+'-'+str(loc_id)+'-'+str(i+row_offset)
-                    
+
                 sql = sql + "('{_type}', '{dataset}', '{time}', {location_id}, '{parameter}', {value}, '{row}')".format(_type=_type, dataset=dataset, time=t.strftime('%Y-%m-%d %H:%M:%S'), location_id=loc_id, parameter=param, value=data[row_num][j], row=row)
                 j += 1
-                
+
             i +=1
 
         #logging.debug(sql)
@@ -338,7 +356,7 @@ class mlfdb(object):
     def remove_dataset(self, dataset, type=None, clean_locations=False):
         """
         Remove dataset
-        
+
         dataset : str
                   dataset name
         type : str
@@ -354,17 +372,17 @@ class mlfdb(object):
             sql += " AND type='{type}'".format(type=type)
         logging.debug(sql)
         self.execute(sql)
-        
+
         # Clean locations
         if clean_locations:
             logging.debug('Removing locations...')
             sql = "DELETE FROM {schema}.location WHERE id NOT IN (SELECT location_id FROM {schema}.data)".format(schema=self.schema)
             self.execute(sql)
-        
+
     def get_locations_by_name(self, names):
         """
         Find location ids by names
-        
+
         names : list
                 list of location names
         """
@@ -372,14 +390,14 @@ class mlfdb(object):
         # logging.debug(sql)
 
         return self._query(sql)
-    
+
     def get_location_by_name(self, name):
         """
         Find location id by name
-        
+
         name : str
                location name
-        
+
         return id (int) or None
         """
         sql = "SELECT id FROM {schema}.location WHERE name='{name}'".format(schema=self.schema, name=name)
@@ -393,7 +411,7 @@ class mlfdb(object):
     def get_locations_by_dataset(self, dataset, starttime, endtime, rettype='tuple'):
         """
         Get all locations attached to dataset.
-        
+
         dataset   : str
                     dataset name
         starttime : DateTime
@@ -404,7 +422,7 @@ class mlfdb(object):
                   tuple|dict
 
         returns list of tuples [(id, name, lon, lat)]
-        """        
+        """
 
         sql = "SELECT id, name, ST_x(geom) as lon, ST_y(geom) as lat"
         sql += " FROM {schema}.location b WHERE id IN (SELECT location_id FROM {schema}.data a WHERE dataset='{dataset}' AND a.time > '{starttime}' AND a.time <= '{endtime}')".format(schema=self.schema, dataset=dataset, starttime=starttime.strftime('%Y-%m-%d %H:%M:%S'), endtime=endtime.strftime('%Y-%m-%d %H:%M:%S'))
@@ -420,15 +438,15 @@ class mlfdb(object):
     def clean_duplicate_rows(self, dataset, rowtype, correct_length):
         """
         Clean duplicate rows. Note! only first 1000 rows are handled.
-        
+
         dataset : str
                   name of dataset
         rowtype : str
-                  feature | label        
+                  feature | label
         correct_length : int
                          correct length of the row
 
-        returns : int 
+        returns : int
                   count of cleaned rows
         """
         self._connect()
@@ -445,7 +463,7 @@ class mlfdb(object):
 
         sql = "SELECT id,type,dataset,time,location_id,parameter,row FROM {schema}.data WHERE type='{rowtype}' and dataset='{dataset}' AND row IN ({duplicates})".format(schema=self.schema, rowtype=rowtype, dataset=dataset, duplicates='\''+'\',\''.join(duplicates)+'\'')
         logging.debug(sql)
-        
+
         rows = self._query(sql)
 
         df = pd.DataFrame(rows)
@@ -460,7 +478,7 @@ class mlfdb(object):
 
         self.execute(sql)
         return len(ids)
-        
+
     def execute(self, statement):
 
         """
@@ -474,7 +492,7 @@ class mlfdb(object):
 
     def _locs_to_dict(self, locs):
         """
-        Convert locations to dict where id is key 
+        Convert locations to dict where id is key
         """
         ret = {}
         for loc in locs:
@@ -483,19 +501,19 @@ class mlfdb(object):
                            'lat' : loc[3]}
 
         return ret
-        
+
     def _connect(self):
         """ Create connection if needed """
         params = self.config()
         self.conn = psycopg2.connect(**params)
         return self.conn
-        
+
     def _query(self, sql):
         """
         Execute query and return results
-        
+
         sql str sql to execute
-        
+
         return list of sets
         """
         self._connect()
@@ -504,6 +522,3 @@ class mlfdb(object):
                 curs.execute(sql)
                 results = curs.fetchall()
                 return results
-
-
-
