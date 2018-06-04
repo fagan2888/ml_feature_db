@@ -12,7 +12,7 @@ from configparser import ConfigParser
 import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
-sys.path.insert(0,parentdir) 
+sys.path.insert(0,parentdir)
 from api.lib import mlfb
 
 
@@ -32,26 +32,26 @@ def main():
     logging.debug(sql)
     if not options.simulate:
         a.execute(sql)
-    
+
     # Enable PostGIS
     if options.create_extension:
         sql = "CREATE EXTENSION postgis"
         logging.debug(sql)
         if not options.simulate:
-            a.execute(sql)    
+            a.execute(sql)
 
     # Enable table func
     if options.create_extension:
         sql = "CREATE EXTENSION tablefunc"
         logging.debug(sql)
         if not options.simulate:
-            a.execute(sql)    
-            
+            a.execute(sql)
+
     sql = "SET SEARCH_PATH TO '{}, default'".format(options.schema)
     logging.debug(sql)
     if not options.simulate:
         a.execute(sql)
-    
+
     # Drop old tables
     if options.force:
         sql = "DROP TABLE IF EXISTS {schema}.data, {schema}.location".format(schema=options.schema)
@@ -70,7 +70,7 @@ def main():
       table_name text;
     BEGIN
       table_name := base_name || TO_CHAR(for_time, '_YY_MM');
-    
+
       EXECUTE 'CREATE TABLE IF NOT EXISTS ' || table_name ||
           '(LIKE ' || base_name || ' INCLUDING ALL,
               CHECK(time >= DATE ''' || date_trunc('month', for_time) ||
@@ -99,7 +99,7 @@ def main():
       -- Here we use time to insert into appropriate partition
       EXECUTE 'insert into {schema}.data_' || to_char(NEW.time, 'YY_MM') ||
           ' values ( $1.* )' USING NEW;
-    
+
       -- Prevent insertion into master table
       RETURN NULL;
     EXCEPTION
@@ -107,20 +107,20 @@ def main():
       -- Use exclusive advisory lock to prevent two transactions
       -- trying to create new partition at the same time
       PERFORM pg_advisory_xact_lock('{schema}.data'::regclass::oid::integer);
- 
+
       -- Create a new partition if another transaction didn't already do it
       PERFORM create_partition('{schema}.data', NEW.time);
- 
+
       -- Try the insert again
       EXECUTE 'insert into {schema}.data_' || to_char(NEW.time, 'YY_MM') ||
           ' values ( $1.* )' USING NEW;
-    
+
       -- Prevent insertion into master table
       RETURN NULL;
     END;
     $$
     LANGUAGE plpgsql;""".format(schema=options.schema)
-    
+
     logging.debug(sql)
     if not options.simulate:
         a.execute(sql)
@@ -128,13 +128,13 @@ def main():
     sql = """
     CREATE TRIGGER data_insert BEFORE INSERT
       ON {schema}.data FOR EACH ROW
-      EXECUTE PROCEDURE trg_insert_data(); 
+      EXECUTE PROCEDURE trg_insert_data();
     COMMIT; """.format(schema=options.schema)
 
     logging.debug(sql)
     if not options.simulate:
         a.execute(sql)
-            
+
     # Create location table
     sql = """
     CREATE TABLE {schema}.location
@@ -158,7 +158,7 @@ def main():
     logging.debug(sql)
     if not options.simulate:
         a.execute(sql)
-            
+
     # Create data table
     sql = """
     CREATE TABLE {schema}.data
@@ -186,20 +186,25 @@ def main():
     sql = "CREATE INDEX row_idx ON {schema}.data (row)".format(schema=options.schema)
     logging.debug(sql)
     if not options.simulate:
-        a.execute(sql)    
+        a.execute(sql)
 
     sql = "CREATE INDEX location_id_idx ON {schema}.data (location_id)".format(schema=options.schema)
     logging.debug(sql)
     if not options.simulate:
-        a.execute(sql)    
+        a.execute(sql)
+
+    sql = "CREATE UNIQUE INDEX idx_values_uniq ON {schema}.data (type, dataset, time, location_id, parameter)".format(options.schema)
+    logging.debug(sql)
+    if not options.simulate:
+        a.execute(sql)
 
     #sql = "CREATE INDEX parameter_idx ON {schema}.data (parameter)".format(schema=options.schema)
     #logging.debug(sql)
     #if not options.simulate:
     #    a.execute(sql)
-        
+
     #sql = "ALTER TABLE traindata_test.location OWNER to weatherproof_rw;"
-    
+
 if __name__=='__main__':
 
     parser = argparse.ArgumentParser()
@@ -211,7 +216,7 @@ if __name__=='__main__':
                         help='Simulate only, default=False')
     parser.add_argument('--create_extension',
                         action='store_true',
-                        help='Create postgis extension, default=False')        
+                        help='Create postgis extension, default=False')
     parser.add_argument('--schema',
                         type=str,
                         default='traindata',
@@ -222,7 +227,7 @@ if __name__=='__main__':
                         help='options: DEBUG,INFO,WARNING,ERROR,CRITICAL')
 
     options = parser.parse_args()
-    
+
     debug=False
 
     logging_level = {'DEBUG':logging.DEBUG,
