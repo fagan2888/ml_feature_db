@@ -441,7 +441,7 @@ class mlfdb(object):
             postfix = table[5:]
             sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_values_uniq_{postfix} ON {schema}.{table} (type, dataset, time, location_id, parameter)".format(schema=self.schema, table=table, postfix=postfix)
             print(sql)
-            #self.execute(sql)
+            self.execute(sql)
         sys.exit()
 
     def get_rows(self, dataset_name,
