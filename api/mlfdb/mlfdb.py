@@ -125,6 +125,86 @@ class mlfdb(object):
                 sql = sql + "('{name}', ST_GeomFromText('POINT({lon} {lat})'))".format(name=loc[0], lat=loc[1], lon=loc[2])
             self.execute(sql)
 
+    def update_rows_df(self, _type, df, dataset, row_prefix='', row_offset=0,
+                       time_column='time', loc_column='loc_id', columns=[],
+                       insert=False):
+        """
+        Update rows from pandas dataframe
+
+        _type       : str
+                      feature or label
+        df          : pd.dataframe
+                      Pandas DataFrame containing data. Column names works as header.
+        dataset     : str
+                      optional dataset information
+        row_prefix  : str
+                      row prefix to add (used if adding rows is done in paraller)
+                      Default: empty
+        row_offset  : int
+                      offset for row numbering (used if adding rows is split to batches)
+                      Default: 0
+        time_column : str
+                      Name of the column where time information is stored
+                      Default: time
+        loc_column  : str
+                      Name of the column where location information is stored.
+                      Default: loc_id
+        columns     : list
+                      Name of columns to be added into db. If empty,
+                      first 4 colums are assumed to be metadata and all columns
+                      from 5th column are added.
+                      Default: empty
+        insert      : boolean
+                      If True, tries to insert if row is missing
+                      Default: False
+
+        return int amount of added rows
+        """
+        logging.debug('Trying to update {} {}s with dataset {}'.format(len(df), _type, dataset))
+        self._connect()
+
+        # we skip metadata and start from first data value
+        numeric_indexer = False
+        if len(columns) == 0:
+            columns = list(df.columns.values)[4:]
+            numeric_indexer = True
+
+
+        sql = ""
+
+        row_num = -1 # <-- for finding correct row
+        for i, data_row in df.iterrows():
+            row_num += 1
+            j = 4
+            for param in columns:
+                t = datetime.datetime.fromtimestamp(int(data_row[time_column]))
+                loc_id = data_row[loc_column]
+
+                if numeric_indexer:
+                    value = data_row.iloc[j]
+                else:
+                    value = data_row[param]
+
+                row = _type+'-'+dataset+'-'+str(t.timestamp())+'-'+str(loc_id)+'-'+str(int(row_num)+int(row_offset))
+
+                params = {'schema'   : self.schema,
+                          'value'    : value,
+                          '_type'    : _type,
+                          'dataset'  : dataset,
+                          'time'     : t.strftime('%Y-%m-%d %H:%M:%S'),
+                          'loc_id'   : loc_id,
+                          'parameter': param,
+                          'row'      : row}
+
+                sql += "UPDATE {schema}.data a SET value={value} WHERE a.type='{_type}' AND a.dataset='{dataset}' AND a.time='{time}' AND location_id={loc_id} AND parameter='{parameter}';".format(**params)
+
+                if insert:
+                    sql += "INSERT INTO {schema}.data (type, dataset, time, location_id, parameter, value, row) SELECT '{_type}', '{dataset}', '{time}', {loc_id}, '{parameter}', {value}, '{row}' WHERE NOT EXISTS (SELECT 1 FROM {schema}.data a WHERE a.type='{_type}' AND a.dataset='{dataset}' AND a.time='{time}' AND location_id={loc_id} AND parameter='{parameter}');".format(**params)
+
+                j += 1
+        logging.debug(sql)
+        return self.execute(sql)
+
     def add_rows_from_df(self, _type, df, dataset, row_prefix='', row_offset=0,
                          time_column='time', loc_column='loc_id', columns=[],
                          update=True):
@@ -154,9 +234,6 @@ class mlfdb(object):
                       first 4 colums are assumed to be metadata and all columns
                       from 5th column are added.
                       Default: empty
-        update      : boolean
-                      Do update in case of conflicts
-                      Default: True
 
         return int amount of added rows
         """
@@ -164,8 +241,10 @@ class mlfdb(object):
         self._connect()
 
         # we skip metadata and start from first data value
+        numeric_indexer = False
         if len(columns) == 0:
             columns = list(df.columns.values)[4:]
+            numeric_indexer = True
 
         sql = "INSERT INTO {schema}.data (type, dataset, time, location_id, parameter, value, row) VALUES ".format(schema=self.schema)
 
@@ -173,23 +252,29 @@ class mlfdb(object):
         row_num = -1 # <-- for finding correct row
         for i, data_row in df.iterrows():
             row_num += 1
+            j = 4
+#            print(data_row)
             for param in columns:
                 if not first: sql = sql+', '
                 else: first = False
 
                 t = datetime.datetime.fromtimestamp(int(data_row[time_column]))
                 loc_id = data_row[loc_column]
+                if numeric_indexer:
+                    value = data_row.iloc[j]
+                else:
+                    value = data_row[param]
+
+                #print('{}: {}'.format(param, value))
 
                 row = _type+'-'+dataset+'-'+str(t.timestamp())+'-'+str(loc_id)+'-'+str(int(row_num)+int(row_offset))
                 #print(data_row)
                 #print(data_row.iloc[j])
-                sql = sql + "('{_type}', '{dataset}', '{time}', {location_id}, '{parameter}', {value}, '{row}')".format(_type=_type, dataset=dataset, time=t.strftime('%Y-%m-%d %H:%M:%S'), location_id=loc_id, parameter=param, value=data_row[param], row=row)
+                sql = sql + "('{_type}', '{dataset}', '{time}', {location_id}, '{parameter}', {value}, '{row}')".format(_type=_type, dataset=dataset, time=t.strftime('%Y-%m-%d %H:%M:%S'), location_id=loc_id, parameter=param, value=value, row=row)
 
-        first = True
-        if update:
-            sql += ' ON CONFLICT (type, dataset, time, location_id, parameter) DO UPDATE SET value = EXCLUDED.value'.format(col=param)
+                j += 1
 
-        logging.debug(sql)
+            #print(sql)
         self.execute(sql)
         return row_num
 
@@ -385,7 +470,8 @@ class mlfdb(object):
         self._connect()
         with self.conn as conn:
             with conn.cursor() as curs:
-                return curs.execute(statement)
+                curs.execute(statement)
+                return curs.rowcount
 
     def _locs_to_dict(self, locs):
         """
@@ -419,30 +505,6 @@ class mlfdb(object):
                 curs.execute(sql)
                 results = curs.fetchall()
                 return results
-
-
-    def create_index(self):
-        """
-        Helping method to add unique index afterwards.
-        """
-
-        sql = """
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema='{}'
-        AND table_type='BASE TABLE'
-        AND table_name like 'data_%'
-        """.format(self.schema)
-
-        tables = self._query(sql)
-
-        for table in tables:
-            table = table[0]
-            postfix = table[5:]
-            sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_values_uniq_{postfix} ON {schema}.{table} (type, dataset, time, location_id, parameter)".format(schema=self.schema, table=table, postfix=postfix)
-            print(sql)
-            self.execute(sql)
-        sys.exit()
 
     def get_rows(self, dataset_name,
                  starttime, endtime,
